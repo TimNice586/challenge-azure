@@ -1,0 +1,2 @@
+requests #for the iRail API 
+python-dotenv #for the environment handlingpi
