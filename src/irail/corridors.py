@@ -1,0 +1,1 @@
+CORRIDORS = {"GENT_BLANKENBERGE": ["Gent-Sint-Pieters", "Brugge", "Blankenberge"]}
