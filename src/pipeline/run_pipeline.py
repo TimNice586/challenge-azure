@@ -2,17 +2,37 @@ from src.irail.liveboard import fetch_liveboard
 from src.irail.corridors import CORRIDORS
 from src.pipeline.corridor_filter import filter_corridor_departures
 from src.pipeline.normalizer import normalize_departure
+from src.storage.sqlite_writer import init_db, insert_departures
 
-print("Pipeline booted")
+def main():
+    print("Pipeline booted\n")
 
-data = fetch_liveboard("Ghent-Sint-Pieters")
-departures = data["departures"]["departure"]
+    # 1. Initialize DB
+    init_db()
+    print("DB initialized")
 
-corridor_trains = filter_corridor_departures(departures, CORRIDORS)
+    # 2. Fetch raw liveboard data
+    departures = fetch_liveboard("Gent-Sint-Pieters")
+    print(f"\nFetched {len(departures)} departures:")
+    for dep in departures[:5]:  # show only first 5 for readability
+        print(dep)
 
-events = [normalize_departure(dep) for dep in corridor_trains]
+    # 3. Filter only corridor departures
+    corridor_departures = filter_corridor_departures(departures, CORRIDORS)
+    print(f"\nFound {len(corridor_departures)} corridor trains:")
+    for dep in corridor_departures:
+        print(dep)
 
-print(f"Found {len(events)} corridor trains")
+    # 4. Normalize for DB storage
+    normalized = [normalize_departure(d) for d in corridor_departures]
+    print("\nNormalized departures for DB:")
+    for dep in normalized:
+        print(dep)
 
-for event in events[:5]:
-    print(event)
+    # 5. Persist to SQLite
+    insert_departures(normalized)
+    print("\nPipeline completed, departures inserted into SQLite DB")
+
+if __name__ == "__main__":
+    main()
+

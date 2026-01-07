@@ -1,9 +1,10 @@
 import requests
+from typing import List, Dict
 
-
-def fetch_liveboard(station_name: str) -> dict:
+def fetch_liveboard(station_name: str) -> List[Dict]:
     """
     Fetch live departure board for a given station.
+    Returns a list of departure dictionaries.
     """
     url = "https://api.irail.be/v1/liveboard/"
     params = {
@@ -12,6 +13,14 @@ def fetch_liveboard(station_name: str) -> dict:
     }
 
     response = requests.get(url, params=params)
-    response.raise_for_status() #checks status code (200-299 is ok, 400-599 raises requests.exceptions.HTTPError) -> prevents silent failures
+    response.raise_for_status()  # Raise an error if the request failed
 
-    return response.json()
+    data = response.json()
+
+    # Ensure departures exist
+    departures = data.get("departures", {}).get("departure", [])
+
+    if not departures:
+        print(f"No departures found for station: {station_name}")
+
+    return departures
