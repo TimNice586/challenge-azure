@@ -1,24 +1,18 @@
+from src.irail.liveboard import fetch_liveboard
+from src.irail.corridors import CORRIDORS
+from src.pipeline.corridor_filter import filter_corridor_departures
+from src.pipeline.normalizer import normalize_departure
+
 print("Pipeline booted")
 
-# sanity tests done:
-
-#from src.irail.corridors import CORRIDORS
-#print(CORRIDORS)
-
-# from src.geo.stations import STATIONS
-# print("Ghent coords:", STATIONS["Ghent-Sint-Pieters"])
-
-# from src.irail.liveboard import fetch_liveboard
-# data = fetch_liveboard("Ghent-Sint-Pieters")
-# print("Keys:", data.keys())
-# print("Number of departures:", len(data["departures"]["departure"]))
-
-from src.irail.liveboard import fetch_liveboard
-from src.irail.corridor_filter import filter_corridor_trains
-
 data = fetch_liveboard("Ghent-Sint-Pieters")
-corridor_trains = filter_corridor_trains(data)
+departures = data["departures"]["departure"]
 
-print(f"Found {len(corridor_trains)} corridor trains:")
-for t in corridor_trains:
-    print(t)
+corridor_trains = filter_corridor_departures(departures, CORRIDORS)
+
+events = [normalize_departure(dep) for dep in corridor_trains]
+
+print(f"Found {len(events)} corridor trains")
+
+for event in events[:5]:
+    print(event)
