@@ -3,6 +3,7 @@ from src.irail.corridors import CORRIDORS
 from src.pipeline.corridor_filter import filter_corridor_departures
 from src.pipeline.normalizer import normalize_departure
 from src.storage.sqlite_writer import init_db, insert_departures
+from src.storage.azure_writer import insert_departures_azure
 
 def main():
     print("Pipeline booted\n")
@@ -32,6 +33,10 @@ def main():
     # 5. Persist to SQLite
     insert_departures(normalized)
     print("\nPipeline completed, departures inserted into SQLite DB")
+
+    # 6. Persist to Azure
+    insert_departures_azure(normalized, conn_str)
+    print("Departures inserted into Azure SQL DB")
 
 if __name__ == "__main__":
     main()
