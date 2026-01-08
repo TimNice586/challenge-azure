@@ -1,19 +1,24 @@
 from shapely.geometry import Point
-from src.geometry.railway_loader import load_railway_geometry_for_corridor
-from src.geometry.corridor_graph import railway_gdf_to_graph, nearest_graph_node
-from src.reference.corridors import load_corridor_endpoints
 import geopandas as gpd
 
-# Load data
+from src.geometry.railway_loader import load_railway_geometry_for_corridor
+from src.geometry.corridor_graph import (
+    railway_gdf_to_graph,
+    nearest_graph_node,
+    shortest_path_geometry,
+)
+from src.reference.corridors import load_corridor_endpoints
+
+# Load railway geometry
 gdf = load_railway_geometry_for_corridor("GHENT_BLANKENBERGE")
 gdf = gdf.to_crs(epsg=31370)
 
+# Build graph
 G = railway_gdf_to_graph(gdf)
 
-corridors = load_corridor_endpoints()
-c = corridors["GHENT_BLANKENBERGE"]
+# Corridor endpoints
+c = load_corridor_endpoints()["GHENT_BLANKENBERGE"]
 
-# Convert endpoints to projected points
 p_from = gpd.GeoSeries(
     [Point(c["from"]["lon"], c["from"]["lat"])],
     crs="EPSG:4326"
@@ -27,5 +32,7 @@ p_to = gpd.GeoSeries(
 n_from = nearest_graph_node(G, p_from)
 n_to = nearest_graph_node(G, p_to)
 
-print("From node:", n_from)
-print("To node:", n_to)
+nodes, path_geom = shortest_path_geometry(G, n_from, n_to)
+
+print("Path nodes:", len(nodes))
+print("Path length (meters):", path_geom.length)
