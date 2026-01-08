@@ -1,20 +1,7 @@
 import pyodbc
+from src.config.azure_sql import get_azure_conn_str
 
-server = "trainpipeline-server.database.windows.net"
-database = "iRailDB"
-username = "CloudSAdd56d68e"
-password = "Ham4Zi!Fa?ti"
-
-conn_str = (
-    "Driver={ODBC Driver 18 for SQL Server};"
-    f"Server=tcp:{server},1433;"
-    f"Database={database};"
-    f"Uid={username};"
-    f"Pwd={password};"
-    "Encrypt=yes;"
-    "TrustServerCertificate=no;"
-    "Connection Timeout=30;"
-)
+conn_str = get_azure_conn_str()
 
 conn = pyodbc.connect(conn_str)
 cursor = conn.cursor()

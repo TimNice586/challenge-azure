@@ -1,7 +1,6 @@
-def insert_departures_azure(departures, conn_str):
-    import pyodbc
+import pyodbc
 
-    with pyodbc.connect(conn_str) as conn:
+def insert_departures_azure(departures, conn: pyodbc.Connection):
         cursor = conn.cursor()
         for dep in departures:
             cursor.execute("""

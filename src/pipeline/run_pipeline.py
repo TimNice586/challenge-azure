@@ -4,6 +4,9 @@ from src.pipeline.corridor_filter import filter_corridor_departures
 from src.pipeline.normalizer import normalize_departure
 from src.storage.sqlite_writer import init_db, insert_departures
 from src.storage.azure_writer import insert_departures_azure
+from src.config.azure_sql import get_azure_conn_str
+import pyodbc
+
 
 def main():
     print("Pipeline booted\n")
@@ -35,8 +38,10 @@ def main():
     print("\nPipeline completed, departures inserted into SQLite DB")
 
     # 6. Persist to Azure
-    insert_departures_azure(normalized, conn_str)
-    print("Departures inserted into Azure SQL DB")
+    conn_str = get_azure_conn_str
+    with pyodbc.connect(conn_str) as conn:
+        insert_departures_azure(normalized, conn)
+        print("Departures inserted into Azure SQL DB")
 
 if __name__ == "__main__":
     main()
