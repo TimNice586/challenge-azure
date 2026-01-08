@@ -9,6 +9,8 @@ from src.geometry.corridor_graph import (
 )
 from src.reference.corridors import load_corridor_endpoints
 
+from src.geometry.corridor_builder import build_corridor_linestring
+
 # Load railway geometry
 gdf = load_railway_geometry_for_corridor("GHENT_BLANKENBERGE")
 gdf = gdf.to_crs(epsg=31370)
@@ -36,3 +38,8 @@ nodes, path_geom = shortest_path_geometry(G, n_from, n_to)
 
 print("Path nodes:", len(nodes))
 print("Path length (meters):", path_geom.length)
+
+line = path_geom
+
+print(type(line))
+print("Length (m):", line.length)
