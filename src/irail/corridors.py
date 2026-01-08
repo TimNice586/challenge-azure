@@ -1,1 +1,1 @@
-CORRIDORS = {"GENT_BLANKENBERGE": ["Gent-Sint-Pieters", "Brugge", "Blankenberge"]}
+CORRIDORS = {"GHENT_BLANKENBERGE": ["Ghent-Sint-Pieters", "Brugge", "Blankenberge"]}
