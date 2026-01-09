@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Belgian Trains Map - Corridor</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+        #map { height: 100vh; width: 100%; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // ------------------------------
+    // 1. Initialize map
+    // ------------------------------
+    const map = L.map('map').setView([51.18, 3.42], 10); // Center between Ghent and Blankenberge
+
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18
+    }).addTo(map);
+
+    // ------------------------------
+    // 2. Train markers storage
+    // ------------------------------
+    const trainMarkers = {};
+
+    // ------------------------------
+    // 3. Function to get color based on delay
+    // ------------------------------
+    function getColor(delay) {
+        if (!delay || delay === 0) return 'green';
+        if (delay <= 300) return 'orange';
+        return 'red';
+    }
+
+    // ------------------------------
+    // 4. Draw corridor line (thin black line)
+    // ------------------------------
+    const corridorCoords = [
+        [51.035896, 3.710675], // Ghent-Sint-Pieters
+        [51.312432, 3.133864]  // Blankenberge
+    ];
+    const corridorLine = L.polyline(corridorCoords, { color: 'black', weight: 2 }).addTo(map);
+
+    // ------------------------------
+    // 5. Update train positions from API
+    // ------------------------------
+    async function updateTrains() {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/active_trains');
+            const trains = await response.json();
+
+            trains.forEach(train => {
+                const {train_id, lat, lon, delay, eta} = train;
+                const popupText = `Train: ${train_id}<br>Delay: ${delay || 0}s<br>ETA: ${eta || 'N/A'}`;
+
+                if (trainMarkers[train_id]) {
+                    // Move existing marker
+                    trainMarkers[train_id].setLatLng([lat, lon]);
+                    trainMarkers[train_id].setStyle({
+                        color: getColor(delay),
+                        fillColor: getColor(delay)
+                    });
+                    trainMarkers[train_id].setTooltipContent(popupText);
+                } else {
+                    // Create new marker
+                    const marker = L.circleMarker([lat, lon], {
+                        radius: 8,
+                        color: getColor(delay),
+                        fillColor: getColor(delay),
+                        fillOpacity: 0.8
+                    }).addTo(map);
+                    marker.bindTooltip(popupText, {
+                        permanent: false,
+                        direction: 'top',
+                        sticky: true
+                    });
+                    trainMarkers[train_id] = marker;
+                }
+            });
+
+        } catch (err) {
+            console.error("Failed to fetch train positions", err);
+        }
+    }
+
+    // ------------------------------
+    // 6. Initial load + interval
+    // ------------------------------
+    updateTrains();
+    setInterval(updateTrains, 5000);
+
+</script>
+</body>
+</html>
+

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Belgian Trains Map</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+        #map { height: 100vh; width: 100%; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // -----------------------
+    // 1. Initialize the map
+    // -----------------------
+    const map = L.map('map').setView([51.12, 3.42], 11); // Center roughly between Ghent and Blankenberge
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18
+    }).addTo(map);
+
+    const trainMarkers = {};
+
+    // -----------------------
+    // 2. Track color by delay
+    // -----------------------
+    function getColor(delay) {
+        if (!delay || delay === 0) return 'green';
+        if (delay <= 300) return 'orange';
+        return 'red';
+    }
+
+    // -----------------------
+    // 3. Add corridor / railway line
+    // -----------------------
+    // Realistic coordinates along Ghent-Sint-Pieters -> Blankenberge
+    const corridorCoords = [
+        [51.054, 3.717],  // Ghent-Sint-Pieters
+        [51.057, 3.726],
+        [51.063, 3.735],
+        [51.070, 3.745],
+        [51.080, 3.756],
+        [51.091, 3.766],
+        [51.100, 3.780],
+        [51.110, 3.800],
+        [51.120, 3.810],
+        [51.130, 3.820],
+        [51.142, 3.830],
+        [51.150, 3.840],  // Blankenberge (approx)
+    ];
+
+    // Thin black line
+    const corridorLine = L.polyline(corridorCoords, { color: 'black', weight: 2 }).addTo(map);
+
+    // -----------------------
+    // 4. Fetch and update trains
+    // -----------------------
+    async function updateTrains() {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/active_trains');
+            const trains = await response.json();
+
+            trains.forEach(train => {
+                const {train_id, lat, lon, delay, eta} = train;
+                const popupText = `Train: ${train_id}<br>Delay: ${delay || 0}s<br>ETA: ${eta || 'N/A'}`;
+
+                if (trainMarkers[train_id]) {
+                    trainMarkers[train_id].setLatLng([lat, lon]);
+                    trainMarkers[train_id].setStyle({
+                        color: getColor(delay),
+                        fillColor: getColor(delay)
+                    });
+                    trainMarkers[train_id].setTooltipContent(popupText);
+                } else {
+                    const marker = L.circleMarker([lat, lon], {
+                        radius: 8,
+                        color: getColor(delay),
+                        fillColor: getColor(delay),
+                        fillOpacity: 0.8
+                    }).addTo(map);
+                    marker.bindTooltip(popupText, { permanent: false, direction: 'top', sticky: true });
+                    trainMarkers[train_id] = marker;
+                }
+            });
+
+        } catch (err) {
+            console.error("Failed to fetch train positions", err);
+        }
+    }
+
+    updateTrains();
+    setInterval(updateTrains, 5000);
+
+</script>
+</body>
+</html>
