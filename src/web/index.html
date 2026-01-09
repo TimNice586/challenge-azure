@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Belgian Train Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// =======================
+// CONFIG
+// =======================
+const apiUrl = 'http://127.0.0.1:8000/trains'; // FastAPI endpoint
+const updateInterval = 5000; // ms
+const animationSteps = 20;   // number of frames for smooth animation
+const animationDelay = updateInterval / animationSteps; // ms between frames
+
+// =======================
+// INITIALIZE MAP
+// =======================
+const map = L.map('map').setView([51.1, 3.5], 10); // center Ghent → Blankenberge
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+}).addTo(map);
+
+// Layer for train markers
+const trainLayer = L.layerGroup().addTo(map);
+
+// Map of train_id -> marker
+const trainMarkers = {};
+
+// =======================
+// HELPER FUNCTIONS
+// =======================
+function getColor(delay) {
+    if (!delay || delay === 0) return 'green';
+    if (delay <= 300) return 'orange';
+    return 'red';
+}
+
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+// =======================
+// FETCH & UPDATE
+// =======================
+async function fetchTrains() {
+    const res = await fetch(apiUrl);
+    return await res.json();
+}
+
+function updateMarker(marker, lat, lon, color, popupText) {
+    marker.setStyle({color: color, fillColor: color});
+    marker.bindPopup(popupText);
+}
+
+// Animate marker from old position to new
+function animateMarker(marker, newLat, newLon) {
+    const oldLatLng = marker.getLatLng();
+    let step = 0;
+
+    function frame() {
+        step++;
+        const t = step / animationSteps;
+        const lat = lerp(oldLatLng.lat, newLat, t);
+        const lon = lerp(oldLatLng.lng, newLon, t);
+        marker.setLatLng([lat, lon]);
+        if (step < animationSteps) {
+            setTimeout(frame, animationDelay);
+        }
+    }
+    frame();
+}
+
+// =======================
+// MAIN UPDATE LOOP
+// =======================
+async function updateTrains() {
+    const trains = await fetchTrains();
+
+    trains.forEach(train => {
+        const {train_id, lat, lon, delay, eta} = train;
+        const color = getColor(delay);
+        const popupText = `Train: ${train_id}<br>ETA: ${new Date(eta*1000).toLocaleTimeString()}<br>Delay: ${delay}s`;
+
+        if (trainMarkers[train_id]) {
+            // animate to new position
+            animateMarker(trainMarkers[train_id], lat, lon);
+            updateMarker(trainMarkers[train_id], lat, lon, color, popupText);
+        } else {
+            // create new marker
+            const marker = L.circleMarker([lat, lon], {
+                radius: 8,
+                color: color,
+                fillColor: color,
+                fillOpacity: 1
+            }).addTo(trainLayer);
+
+            marker.bindPopup(popupText);
+            marker.on('mouseover', function() { this.openPopup(); });
+            marker.on('mouseout', function() { this.closePopup(); });
+
+            trainMarkers[train_id] = marker;
+        }
+    });
+}
+
+// =======================
+// START LOOP
+// =======================
+updateTrains();
+setInterval(updateTrains, updateInterval);
+</script>
+</body>
+</html>

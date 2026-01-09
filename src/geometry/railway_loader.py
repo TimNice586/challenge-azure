@@ -4,6 +4,10 @@ import geopandas as gpd
 from shapely.geometry import LineString, MultiLineString, box
 from src.reference.corridors import load_corridor_endpoints
 
+import requests
+import sqlite3
+import time
+
 CACHE_DIR = "data/geo_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -69,4 +73,87 @@ def simplify_geometries(gdf):
     )
     return gdf
 
+#retry it
+IRAIL_URL = "https://api.irail.be/connections/"
+DB_PATH = "data/railway.db"
 
+
+def fetch_connections():
+    params = {
+        "from": "Gent-Sint-Pieters",
+        "to": "Blankenberge",
+        "format": "json"
+    }
+    response = requests.get(IRAIL_URL, params=params, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+def ingest_irail_data():
+    data = fetch_connections()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    for connection in data.get("connection", []):
+        train = connection["departure"]["vehicle"]
+        train_id = train.replace("BE.NMBS.", "")
+
+        dep = connection["departure"]
+        arr = connection["arrival"]
+
+        # Insert train
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO trains
+            (train_id, train_type, origin_station, destination_station)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                train_id,
+                train_id[:2],
+                dep["station"],
+                arr["station"]
+            )
+        )
+
+        for stop in [dep, arr]:
+            station_id = stop["station"]
+
+            # Insert station
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO stations
+                (station_id, name, lat, lon)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    station_id,
+                    stop["station"],
+                    float(stop["stationinfo"]["locationY"]),
+                    float(stop["stationinfo"]["locationX"])
+                )
+            )
+
+            # Insert stop
+            cur.execute(
+                """
+                INSERT INTO train_stops
+                (train_id, station_id, scheduled_departure,
+                 actual_departure, delay)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    train_id,
+                    station_id,
+                    int(stop["time"]),
+                    int(stop["time"]) + int(stop.get("delay", 0)),
+                    int(stop.get("delay", 0))
+                )
+            )
+
+    conn.commit()
+    conn.close()
+
+
+if __name__ == "__main__":
+    ingest_irail_data()
