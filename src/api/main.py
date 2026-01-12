@@ -1,42 +1,27 @@
-import os
-import sqlite3
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.geometry.train_position import get_active_trains, compute_train_position
+import sqlite3
+from src.geometry.train_position import get_active_trains, compute_train_position, DB_PATH
+from shapely.geometry import mapping
+from src.geometry.rail_corridor_curve import build_ghent_blankenberge_curve
+from fastapi.responses import JSONResponse
+import geopandas as gpd
 
-# -----------------------------
-# 1. Use environment variable
-# -----------------------------
-DB_CONNECTION_STRING = os.environ.get("SQL_CONNECTION_STRING")
-
-if not DB_CONNECTION_STRING:
-    raise ValueError("SQL_CONNECTION_STRING environment variable is not set!")
-
-# -----------------------------
-# 2. FastAPI app
-# -----------------------------
 app = FastAPI(title="Belgian Trains API")
 
-# Allow frontend to fetch data
+# Optional: allow JS frontend to fetch data
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # in production, restrict to your domain
+    allow_origins=["*"],  # or your domain
     allow_methods=["*"],
     allow_headers=["*"]
 )
 
-# -----------------------------
-# 3. Endpoint to get active trains
-# -----------------------------
 @app.get("/active_trains")
 def active_trains():
-    # Connect to Azure SQL
-    # Note: sqlite3 won't work for Azure SQL, you must use pyodbc
-    import pyodbc
-
-    conn = pyodbc.connect(DB_CONNECTION_STRING)
-    
+    conn = sqlite3.connect(DB_PATH)
     train_ids = get_active_trains(conn)
+    conn.close()
 
     positions = []
     for tid in train_ids:
@@ -44,5 +29,33 @@ def active_trains():
         if pos:
             positions.append(pos)
 
-    conn.close()
     return positions
+
+@app.get("/rail_corridor")
+def rail_corridor():
+    curve = build_ghent_blankenberge_curve()
+
+    geojson = {
+        "type": "Feature",
+        "geometry": mapping(curve.line),
+        "properties": {
+            "length_m": curve.length
+        }
+    }
+
+    return geojson
+
+@app.get("/railway_corridor")
+def railway_corridor():
+    """
+    Return the exact rail corridor geometry used for interpolation
+    """
+    curve = build_ghent_blankenberge_curve()
+
+    # Convert to GeoDataFrame
+    gdf = gpd.GeoDataFrame(
+        geometry=[curve.line],
+        crs="EPSG:31370"
+    ).to_crs(epsg=4326)
+
+    return JSONResponse(gdf.__geo_interface__)

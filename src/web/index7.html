@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Belgian Trains – Live (Real Rail)</title>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+/* -----------------------
+   1. Map initialization
+------------------------ */
+const map = L.map('map').setView([51.12, 3.42], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18
+}).addTo(map);
+
+
+/* -----------------------
+   2. Load REAL railway corridor
+   (same geometry as backend)
+------------------------ */
+fetch("http://127.0.0.1:8000/railway_corridor")
+    .then(res => res.json())
+    .then(geojson => {
+        L.geoJSON(geojson, {
+            style: {
+                color: "black",
+                weight: 3,
+                opacity: 0.9
+            }
+        }).addTo(map);
+    })
+    .catch(err => console.error("Failed to load corridor", err));
+
+
+/* -----------------------
+   3. Train markers
+------------------------ */
+const trainMarkers = {};
+
+function delayColor(delay) {
+    if (!delay || delay <= 0) return "green";
+    if (delay <= 300) return "orange";
+    return "red";
+}
+
+
+/* -----------------------
+   4. Fetch LIVE trains only
+------------------------ */
+async function updateTrains() {
+    try {
+        const res = await fetch("http://127.0.0.1:8000/active_trains");
+        const trains = await res.json();
+
+        const seen = new Set();
+
+        trains.forEach(t => {
+            const { train_id, lat, lon, delay } = t;
+            seen.add(train_id);
+
+            const color = delayColor(delay);
+            const popup = `
+                <b>${train_id}</b><br>
+                Delay: ${delay || 0}s
+            `;
+
+            if (trainMarkers[train_id]) {
+                trainMarkers[train_id].setLatLng([lat, lon]);
+                trainMarkers[train_id].setStyle({
+                    color: color,
+                    fillColor: color
+                });
+                trainMarkers[train_id].setTooltipContent(popup);
+            } else {
+                const marker = L.circleMarker([lat, lon], {
+                    radius: 7,
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.9
+                }).addTo(map);
+
+                marker.bindTooltip(popup, {
+                    direction: "top",
+                    sticky: true
+                });
+
+                trainMarkers[train_id] = marker;
+            }
+        });
+
+        // Remove trains no longer active
+        Object.keys(trainMarkers).forEach(id => {
+            if (!seen.has(id)) {
+                map.removeLayer(trainMarkers[id]);
+                delete trainMarkers[id];
+            }
+        });
+
+    } catch (e) {
+        console.error("Live update failed", e);
+    }
+}
+
+updateTrains();
+setInterval(updateTrains, 5000);
+
+</script>
+
+</body>
+</html>

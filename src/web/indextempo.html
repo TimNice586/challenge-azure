@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Belgian Trains – Time Scrubber + Direction</title>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        #map {
+            height: calc(100vh - 60px);
+            width: 100%;
+        }
+
+        #controls {
+            height: 60px;
+            padding: 10px;
+            background: #111;
+            color: white;
+            font-family: sans-serif;
+        }
+
+        input[type="range"] {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="controls">
+    Time offset (seconds in the past):
+    <input type="range" id="timeSlider" min="0" max="600" value="0">
+    <span id="timeValue">0</span>s
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+/* -----------------------
+   1. Map
+------------------------ */
+const map = L.map('map').setView([51.12, 3.42], 11);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18
+}).addTo(map);
+
+
+/* -----------------------
+   2. Load real rail corridor
+------------------------ */
+fetch("http://127.0.0.1:8000/railway_corridor")
+    .then(r => r.json())
+    .then(gj => {
+        L.geoJSON(gj, {
+            style: { color: "black", weight: 3 }
+        }).addTo(map);
+    });
+
+
+/* -----------------------
+   3. State
+------------------------ */
+const trainMarkers = {};
+const trainHistory = {};   // train_id → [{t, lat, lon}]
+let timeOffset = 0;        // seconds in the past
+
+
+/* -----------------------
+   4. Helpers
+------------------------ */
+function delayColor(delay) {
+    if (!delay || delay <= 0) return "green";
+    if (delay <= 300) return "orange";
+    return "red";
+}
+
+function computeHeading(p1, p2) {
+    const dx = p2.lon - p1.lon;
+    const dy = p2.lat - p1.lat;
+    return Math.atan2(dx, dy) * 180 / Math.PI;
+}
+
+function getPositionAtTime(history, targetTime) {
+    for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].t <= targetTime) {
+            return history[i];
+        }
+    }
+    return null;
+}
+
+
+/* -----------------------
+   5. Fetch live trains
+------------------------ */
+async function fetchLive() {
+    const res = await fetch("http://127.0.0.1:8000/active_trains");
+    const trains = await res.json();
+    const now = Date.now() / 1000;
+
+    trains.forEach(t => {
+        if (!trainHistory[t.train_id]) {
+            trainHistory[t.train_id] = [];
+        }
+
+        trainHistory[t.train_id].push({
+            t: now,
+            lat: t.lat,
+            lon: t.lon,
+            delay: t.delay || 0
+        });
+
+        // keep only last 15 minutes
+        trainHistory[t.train_id] =
+            trainHistory[t.train_id].filter(p => now - p.t < 900);
+    });
+}
+
+
+/* -----------------------
+   6. Render trains (time-aware)
+------------------------ */
+function renderTrains() {
+    const targetTime = (Date.now() / 1000) - timeOffset;
+
+    Object.entries(trainHistory).forEach(([id, history]) => {
+        const p = getPositionAtTime(history, targetTime);
+        if (!p) return;
+
+        const prev = history.length > 1 ? history[history.length - 2] : p;
+        const heading = computeHeading(prev, p);
+        const color = delayColor(p.delay);
+
+        if (!trainMarkers[id]) {
+            trainMarkers[id] = L.marker(
+                [p.lat, p.lon],
+                {
+                    icon: L.divIcon({
+                        className: "",
+                        html: `
+                          <div style="
+                            transform: rotate(${heading}deg);
+                            color:${color};
+                            font-size:18px;">
+                            ▲
+                          </div>`
+                    })
+                }
+            ).addTo(map);
+        } else {
+            trainMarkers[id].setLatLng([p.lat, p.lon]);
+            trainMarkers[id].setIcon(
+                L.divIcon({
+                    html: `
+                      <div style="
+                        transform: rotate(${heading}deg);
+                        color:${color};
+                        font-size:18px;">
+                        ▲
+                      </div>`
+                })
+            );
+        }
+    });
+}
+
+
+/* -----------------------
+   7. Time slider
+------------------------ */
+const slider = document.getElementById("timeSlider");
+const valueLabel = document.getElementById("timeValue");
+
+slider.addEventListener("input", e => {
+    timeOffset = parseInt(e.target.value);
+    valueLabel.textContent = timeOffset;
+    renderTrains();
+});
+
+
+/* -----------------------
+   8. Main loop
+------------------------ */
+fetchLive();
+setInterval(fetchLive, 5000);
+setInterval(renderTrains, 1000);
+
+</script>
+</body>
+</html>

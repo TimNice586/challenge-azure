@@ -9,7 +9,7 @@ import sqlite3
 import time
 
 CACHE_DIR = "data/geo_cache"
-os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)   
 
 
 def corridor_bbox(corridor, padding=0.02):
@@ -84,7 +84,7 @@ def fetch_connections():
         "to": "Blankenberge",
         "format": "json"
     }
-    response = requests.get(IRAIL_URL, params=params, timeout=10)
+    response = requests.get(IRAIL_URL, params=params, timeout=30)
     response.raise_for_status()
     return response.json()
 

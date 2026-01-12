@@ -1,8 +1,6 @@
 import sqlite3
 import time
-import geopandas as gpd
 from shapely.geometry import LineString
-from src.geometry.rail_corridor_curve import build_ghent_blankenberge_curve
 
 
 DB_PATH = "data/railway.db"
@@ -77,17 +75,13 @@ def compute_train_position(train_id):
             if not coords_a or not coords_b:
                 return None
 
-            curve = build_ghent_blankenberge_curve()
+            line = LineString([
+                (coords_a[1], coords_a[0]),
+                (coords_b[1], coords_b[0])
+            ])
 
             progress = (now - time_a) / (time_b - time_a)
-            distance = progress * curve.length
-
-            point = curve.position_at_distance(distance)
-
-            # Convert back to WGS84 for Leaflet
-            gdf_point = gpd.GeoSeries([point], crs="EPSG:31370").to_crs(epsg=4326).iloc[0]
-
-            lon, lat = gdf_point.x, gdf_point.y
+            lon, lat = interpolate_position(line, progress)
 
             return {
                 "train_id": train_id,
